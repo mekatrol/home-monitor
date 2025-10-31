@@ -6,7 +6,7 @@ from typing import Dict, Any, List, Optional
 import yaml
 
 # new dep
-from aiomqtt import Client, MqttError
+from aiomqtt import Client, MqttError, TLSParameters
 
 BASE = Path(__file__).resolve().parent
 CONFIG_PATH = BASE / "devices.yml"
@@ -230,7 +230,7 @@ class MqttWatcher:
 
         while True:
             try:
-                ssl_ctx = ssl.create_default_context() if tls else None
+                tls_params = TLSParameters() if self.cfg.get("tls") else None
                 async with Client(
                     hostname=host,
                     port=port,
@@ -238,7 +238,7 @@ class MqttWatcher:
                     password=password,
                     client_id=cid,
                     keepalive=keepalive,
-                    ssl=ssl_ctx,
+                    tls_params=tls_params
                 ) as client:
                     # subscribe to all patterns
                     for p in self.patterns:
