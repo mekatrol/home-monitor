@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Monitor",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/monitor/monitor.py",
+      "console": "integratedTerminal",
+      "justMyCode": false,
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      },
+      "envFile": "${workspaceFolder}/monitor/.env.debug",
+      "cwd": "${workspaceFolder}/monitor"
+    }
+  ]
+}
