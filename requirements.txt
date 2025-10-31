@@ -1,2 +1,2 @@
-asyncio-mqtt 
+aiomqtt 
 pyyaml
