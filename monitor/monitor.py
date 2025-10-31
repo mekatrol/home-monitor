@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import asyncio, os, sqlite3, smtplib, ssl, json, time, subprocess, logging
+import asyncio, sqlite3, smtplib, ssl, json, time, logging
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -20,10 +20,23 @@ logging.basicConfig(
 )
 
 
-# ---------------- core utils ----------------
 def load_config() -> Dict[str, Any]:
-    with open(CONFIG_PATH, "r") as f:
-        return yaml.safe_load(f) or {}
+    base_cfg = {}
+    debug_cfg = {}
+    base_path = CONFIG_PATH
+    debug_path = BASE / "devices.debug.yml"
+
+    if base_path.exists():
+        with open(base_path, "r") as f:
+            base_cfg = yaml.safe_load(f) or {}
+
+    if debug_path.exists():
+        with open(debug_path, "r") as f:
+            debug_cfg = yaml.safe_load(f) or {}
+
+    # overlay: debug overrides base
+    merged = {**base_cfg, **debug_cfg}
+    return merged
 
 
 def init_db():
@@ -183,6 +196,10 @@ def update_device_db(
 
 async def check_device(device: dict, cfg_alert: dict):
     name, host = device.get("name"), device.get("host")
+
+    if host is None or name is None:
+        return
+
     ports: List[int] = device.get("ports", [])
     ping_ok = await ping_host(host)
     port_res = (
@@ -220,69 +237,62 @@ class MqttWatcher:
         if not self.cfg:
             logging.info("mqtt disabled")
             return
+
         host = self.cfg.get("host", "127.0.0.1")
         port = int(self.cfg.get("port", 1883))
-        cid = self.cfg.get("client_id", "home-monitor")
-        keepalive = int(self.cfg.get("keepalive", 30))
-        username = self.cfg.get("username") or None
-        password = self.cfg.get("password") or None
-        tls = bool(self.cfg.get("tls", False))
+        keep = int(self.cfg.get("keepalive", 30))
+        user = self.cfg.get("username") or None
+        pwd = self.cfg.get("password") or None
+        use_tls = bool(self.cfg.get("tls", False))
+        tls_params = TLSParameters() if use_tls else None
 
         while True:
             try:
-                tls_params = TLSParameters() if self.cfg.get("tls") else None
                 async with Client(
-                    hostname=host,
+                    host,
                     port=port,
-                    username=username,
-                    password=password,
-                    client_id=cid,
-                    keepalive=keepalive,
-                    tls_params=tls_params
+                    username=user,
+                    password=pwd,
+                    keepalive=keep,
+                    tls_params=tls_params,
                 ) as client:
-                    # subscribe to all patterns
                     for p in self.patterns:
                         t = p.get("topic")
                         if t:
                             await client.subscribe(t)
                     logging.info("mqtt connected and subscribed")
+
                     tasks = [
                         asyncio.create_task(self._consume(client)),
                         asyncio.create_task(self._evaluate_loop()),
                     ]
-                    await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
+                    await asyncio.gather(*tasks)
             except MqttError as e:
                 logging.warning("mqtt error: %s", e)
-            except Exception as e:
-                logging.exception("mqtt exception: %s", e)
-            # backoff on disconnect
-            await asyncio.sleep(5)
+                await asyncio.sleep(5)
 
     async def _consume(self, client: Client):
-        async with client.unfiltered_messages() as messages:
-            for p in self.patterns:
-                # already subscribed in run()
-                pass
-            async for msg in messages:
-                t = msg.topic
-                ts = int(time.time())
-                self.last_seen[t] = ts
-                # ensure row exists
-                conn = sqlite3.connect(DB_PATH)
-                cur = conn.cursor()
-                # find max_gap from first matching pattern
-                mg = self._max_gap_for_topic(t)
-                cur.execute(
-                    """INSERT OR IGNORE INTO topic_status(topic,last_seen,stale,last_change,max_gap,pattern)
-                               VALUES(?,?,?,?,?,?)""",
-                    (t, ts, 0, ts, mg, self._first_pattern_for_topic(t)),
-                )
-                cur.execute(
-                    """UPDATE topic_status SET last_seen=?, max_gap=?, pattern=? WHERE topic=?""",
-                    (ts, mg, self._first_pattern_for_topic(t), t),
-                )
-                conn.commit()
-                conn.close()
+        async for msg in client.messages:
+            t = str(msg.topic)  # <- fix
+            ts = int(time.time())
+            self.last_seen[t] = ts
+
+            mg = self._max_gap_for_topic(t)
+            pat = self._first_pattern_for_topic(t)
+
+            conn = sqlite3.connect(DB_PATH)
+            cur = conn.cursor()
+            cur.execute(
+                """INSERT OR IGNORE INTO topic_status(topic,last_seen,stale,last_change,max_gap,pattern)
+                        VALUES(?,?,?,?,?,?)""",
+                (t, ts, 0, ts, mg, pat),
+            )
+            cur.execute(
+                """UPDATE topic_status SET last_seen=?, max_gap=?, pattern=? WHERE topic=?""",
+                (ts, mg, pat, t),
+            )
+            conn.commit()
+            conn.close()
 
     async def _evaluate_loop(self):
         while True:
@@ -380,21 +390,19 @@ async def mqtt_loop():
     await watcher.run()
 
 
-def main():
+async def _main():
     init_db()
     logging.info("monitor start")
+    await asyncio.gather(
+        device_loop(),
+        mqtt_loop(),
+    )
+
+
+if __name__ == "__main__":
     try:
-        asyncio.run(
-            asyncio.wait(
-                {asyncio.create_task(device_loop()), asyncio.create_task(mqtt_loop())},
-                return_when=asyncio.FIRST_EXCEPTION,
-            )
-        )
+        asyncio.run(_main())
     except KeyboardInterrupt:
         logging.info("monitor stop")
     except Exception:
         logging.exception("monitor crash")
-
-
-if __name__ == "__main__":
-    main()
