@@ -9,13 +9,14 @@ import logging
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Dict, Any, List, Optional
-import yaml
+from config_loader import load_config
 
 # new dep
 from aiomqtt import Client, MqttError, TLSParameters
 
 BASE = Path(__file__).resolve().parent
-CONFIG_PATH = BASE / "devices.yml"
+CONFIG_BASE_PATH = BASE / "devices.yml"
+CONFIG_DEBUG_PATH = BASE / "devices.yml"
 DB_PATH = BASE / "monitor.db"
 LOG_PATH = BASE / "monitor.log"
 
@@ -24,25 +25,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
 )
-
-
-def load_config() -> Dict[str, Any]:
-    base_cfg = {}
-    debug_cfg = {}
-    base_path = CONFIG_PATH
-    debug_path = BASE / "devices.debug.yml"
-
-    if base_path.exists():
-        with open(base_path, "r") as f:
-            base_cfg = yaml.safe_load(f) or {}
-
-    if debug_path.exists():
-        with open(debug_path, "r") as f:
-            debug_cfg = yaml.safe_load(f) or {}
-
-    # overlay: debug overrides base
-    merged = {**base_cfg, **debug_cfg}
-    return merged
 
 
 def init_db():
@@ -160,7 +142,8 @@ async def check_tcp_port(host: str, port: int, timeout: float = 3.0) -> bool:
         except AttributeError:
             pass
         return True
-    except Exception:
+    except Exception as e:
+        logging.exception("email error: %s", e)
         return False
 
 
@@ -375,7 +358,7 @@ def _mqtt_match(pattern: str, topic: str) -> bool:
 
 # ---------------- main loop ----------------
 async def device_loop():
-    cfg = load_config()
+    cfg = load_config(CONFIG_BASE_PATH, CONFIG_DEBUG_PATH)
     interval = int(cfg.get("check_interval", 30))
     while True:
         start = time.time()
@@ -383,7 +366,7 @@ async def device_loop():
             await check_device(d, cfg.get("alert", {}))
         # hot-reload config safely
         try:
-            cfg = load_config()
+            cfg = load_config(CONFIG_BASE_PATH, CONFIG_DEBUG_PATH)
         except Exception as e:
             logging.exception("config reload error: %s", e)
         elapsed = time.time() - start
@@ -391,7 +374,7 @@ async def device_loop():
 
 
 async def mqtt_loop():
-    cfg = load_config()
+    cfg = load_config(CONFIG_BASE_PATH, CONFIG_DEBUG_PATH)
     watcher = MqttWatcher(cfg.get("mqtt", {}), cfg.get("alert", {}))
     await watcher.run()
 
