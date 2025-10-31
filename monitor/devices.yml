@@ -1,6 +1,10 @@
 # You can create a devices.debug.yml to override values in this file. devices.debug.yml is in .gitignore so won't be committed.
 check_interval: 30
 
+devices:
+  - name: "MQTT Server"
+    host: "mqtt.lan"
+
 mqtt:
   host: mqtt.lan
   port: 1883

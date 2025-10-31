@@ -5,13 +5,12 @@
       "name": "Python: Monitor",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/monitor/monitor.py",
+      "program": "${workspaceFolder}/monitor/app.py",
       "console": "integratedTerminal",
       "justMyCode": false,
       "env": {
         "PYTHONUNBUFFERED": "1"
       },
-      "envFile": "${workspaceFolder}/monitor/.env.debug",
       "cwd": "${workspaceFolder}/monitor"
     }
   ]

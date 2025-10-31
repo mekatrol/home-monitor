@@ -14,6 +14,7 @@ import logging
 import sys
 from pathlib import Path
 from typing import Any, Dict, Mapping, Tuple, Union
+from copy import deepcopy
 
 import yaml
 
@@ -169,18 +170,18 @@ def _normalize_smart_punct(text: str) -> Tuple[str, bool]:
 
 def deep_merge(a: Mapping[str, Any], b: Mapping[str, Any]) -> Dict[str, Any]:
     """
-    Deep merge two mappings. 'b' overrides 'a'.
-    Rules:
-      - If both values are dicts -> merge recursively.
-      - Otherwise -> take value from 'b'.
-      - Lists -> replaced by 'b' entirely (simple and predictable).
+    Deep merge two mappings. Values from b overwrite a.
+    - Dict vs dict -> recurse
+    - Anything else -> overwrite with b (including None and lists)
+    - Uses deepcopy to avoid aliasing bugs
     """
-    out: Dict[str, Any] = dict(a)  # shallow copy
+    out: Dict[str, Any] = deepcopy(dict(a))
     for k, v in b.items():
-        if k in out and isinstance(out[k], dict) and isinstance(v, dict):
-            out[k] = deep_merge(out[k], v)
+        av = out.get(k)
+        if isinstance(av, Mapping) and isinstance(v, Mapping):
+            out[k] = deep_merge(av, v)
         else:
-            out[k] = v
+            out[k] = deepcopy(v)
     return out
 
 
