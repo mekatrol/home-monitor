@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-import asyncio, sqlite3, smtplib, ssl, json, time, logging
+import asyncio
+import sqlite3
+import smtplib
+import ssl
+import json
+import time
+import logging
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Dict, Any, List, Optional
