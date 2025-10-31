@@ -6,7 +6,7 @@ from typing import Dict, Any, List, Optional
 import yaml
 
 # new dep
-from asyncio_mqtt import Client, MqttError
+from aiomqtt import Client, MqttError
 
 BASE = Path(__file__).resolve().parent
 CONFIG_PATH = BASE / "devices.yml"
