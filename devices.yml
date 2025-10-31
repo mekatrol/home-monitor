@@ -1,0 +1,26 @@
+check_interval: 30
+
+mqtt:
+  host: mqtt.lan
+  port: 1883
+  username: ""          # optional
+  password: ""          # optional
+  client_id: "home-monitor"
+  keepalive: 30
+  tls: false            # set true for TLS
+  startup_grace: 120    # seconds before first “missing” alert
+  topics:
+    - topic: "zigbee2mqtt/bridge/state"
+      max_gap: 60
+    - topic: "tele/+/STATE"     # wildcards OK
+      max_gap: 120
+
+alert:
+  webhook: ""           # https URL
+  email:
+    smtp_server: ""
+    smtp_port: 587
+    username: ""
+    password: ""
+    from: "monitor@example.com"
+    to: "you@example.com"
