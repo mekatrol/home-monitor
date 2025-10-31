@@ -12,8 +12,6 @@ mqtt:
   topics:
     - topic: "zigbee2mqtt/bridge/state"
       max_gap: 60
-    - topic: "tele/+/STATE"     # wildcards OK
-      max_gap: 120
 
 alert:
   webhook: ""           # https URL
