@@ -12,7 +12,7 @@ import subprocess
 from config_loader import load_config
 from db import Db
 from mqtt_watcher import MqttWatcher
-from alerting import alert
+from alerting import alert, send_email
 
 if sys.platform.startswith("win"):
     # Needed because ProactorEventLoop lacks add_reader/add_writer
@@ -164,6 +164,15 @@ async def mqtt_loop():
 async def _main():
     db.init()
     logging.info("monitor start")
+    cfg = load_config(CONFIG_BASE_PATH, CONFIG_DEBUG_PATH)
+    cfg_alert: dict = cfg.get("alert", {})
+    payload = {
+        "type": "monitor_online",
+        "time": int(time.time()),
+    }
+
+    send_email(cfg_alert["email"], "Monitor startup", json.dumps(payload, indent=2))
+
     await asyncio.gather(
         device_loop(),
         mqtt_loop(),
